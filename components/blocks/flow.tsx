@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useCallback, useEffect } from "react"
 import ReactFlow, {
   Controls,
@@ -15,56 +13,31 @@ import ReactFlow, {
   type NodeChange,
   type EdgeChange,
   Panel,
-  MiniMap,
-  ConnectionLineType,
-  ReactFlowProvider,
 } from "reactflow"
 import "reactflow/dist/style.css"
 import { PlusCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useToast } from "@/hooks/use-toast"
 
-import InputBlockNode from "@/components/blocks/InputBlock"
-import HiddenBlock from "@/components/blocks/HiddenBlock"
-import OutputBlockNode from "@/components/blocks/OutputBlock"
-import ConvolutionalBlock from "@/components/blocks/ConvolutionalBlock"
-import PoolingBlock from "@/components/blocks/PoolingBlock"
-import StartBlock from "@/components/blocks/StartBlock"
-import TrainingBlock from "@/components/blocks/TrainingBlock"
-import ClassifierBlock from "@/components/blocks/ClassifierBlock"
-import ContextMenu from "@/components/scratchUI/ContextMenu"
+import InputBlockNode from "./InputBlock"
+import HiddenBlock from "./HiddenBlock"
+import OutputBlockNode from "./OutputBlock"
+import ConvolutionalBlock from "./ConvolutionalBlock"
+import PoolingBlock from "./PoolingBlock"
 
 const nodeTypes = {
   inputBlock: InputBlockNode,
   hiddenBlock: HiddenBlock,
   outputBlock: OutputBlockNode,
-  convolutionalBlock: ConvolutionalBlock,
+  convBlock: ConvolutionalBlock,
   poolingBlock: PoolingBlock,
-  classifierBlock: ClassifierBlock,
-  trainingBlock: TrainingBlock,
-  startBlock: StartBlock,
 }
 
 // Initial image size (assuming square image)
 const INITIAL_IMAGE_SIZE = 128
 
 export default function NeuralNetworkFlow() {
-  const { toast } = useToast()
   const [nodes, setNodes] = useState<Node[]>([
-    {
-      id: "classifier-1",
-      type: "classifierBlock",
-      position: { x: 100, y: 100 },
-      data: {
-        label: "Classifier Layer",
-        sizeIn: 12,
-        sizeOut: 12,
-        id: "classifier-1",
-        sequenceIndex: 0,
-        onChange: (id: string, param: string, value: any) => {},
-      },
-    },
     {
       id: "input-1",
       type: "inputBlock",
@@ -107,7 +80,7 @@ export default function NeuralNetworkFlow() {
     },
     {
       id: "conv-1",
-      type: "convolutionalBlock",
+      type: "convBlock",
       position: { x: 100, y: 300 },
       data: {
         label: "Conv2D Layer 1",
@@ -137,7 +110,7 @@ export default function NeuralNetworkFlow() {
     },
     {
       id: "conv-2",
-      type: "convolutionalBlock",
+      type: "convBlock",
       position: { x: 800, y: 300 },
       data: {
         label: "Conv2D Layer 2",
@@ -153,7 +126,6 @@ export default function NeuralNetworkFlow() {
   ])
 
   const [edges, setEdges] = useState<Edge[]>([])
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
   const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)), [])
 
@@ -164,30 +136,14 @@ export default function NeuralNetworkFlow() {
     setEdges((eds) => addEdge(connection, eds))
   }, [])
 
-  // Context menu handlers
-  const onContextMenu = (event: React.MouseEvent) => {
-    event.preventDefault()
-    const reactFlowBounds = event.currentTarget.getBoundingClientRect()
-    const position = {
-      x: event.clientX - reactFlowBounds.left,
-      y: event.clientY - reactFlowBounds.top,
-    }
-
-    setContextMenu(position)
-  }
-
-  const onPaneClick = () => {
-    setContextMenu(null)
-  }
-
   // Find the next convolutional layer in sequence
   const findNextConvLayer = useCallback((currentNodeId: string, nodes: Node[]) => {
     // Get all conv blocks
-    const convNodes = nodes.filter((node) => node.type === "convolutionalBlock")
+    const convNodes = nodes.filter((node) => node.type === "convBlock")
 
     // Find the current node
     const currentNode = nodes.find((node) => node.id === currentNodeId)
-    if (!currentNode || currentNode.type !== "convolutionalBlock") return null
+    if (!currentNode || currentNode.type !== "convBlock") return null
 
     // Sort by sequence index
     const sortedConvNodes = [...convNodes].sort((a, b) => a.data.sequenceIndex - b.data.sequenceIndex)
@@ -229,7 +185,7 @@ export default function NeuralNetworkFlow() {
   const calculateInputBlockDimension = useCallback(
     (nodes: Node[]) => {
       // Get the last convolutional block
-      const convBlocks = nodes.filter((node) => node.type === "convolutionalBlock")
+      const convBlocks = nodes.filter((node) => node.type === "convBlock")
 
       if (convBlocks.length === 0) return 12 // Default if no conv blocks
 
@@ -253,7 +209,7 @@ export default function NeuralNetworkFlow() {
     let needsUpdate = false
 
     // Get all conv and pool blocks
-    const convPoolNodes = nodes.filter((node) => node.type === "convolutionalBlock" || node.type === "poolingBlock")
+    const convPoolNodes = nodes.filter((node) => node.type === "convBlock" || node.type === "poolingBlock")
 
     // Sort by sequence index
     const sortedNodes = [...convPoolNodes].sort((a, b) => a.data.sequenceIndex - b.data.sequenceIndex)
@@ -264,7 +220,7 @@ export default function NeuralNetworkFlow() {
       const prevNode = sortedNodes[i - 1]
 
       // If current node is a pooling layer and previous node is a conv layer
-      if (currentNode.type === "poolingBlock" && prevNode.type === "convolutionalBlock") {
+      if (currentNode.type === "poolingBlock" && prevNode.type === "convBlock") {
         if (currentNode.data.channels !== prevNode.data.sizeOut) {
           needsUpdate = true
 
@@ -305,7 +261,7 @@ export default function NeuralNetworkFlow() {
         })
 
         // If a convolutional layer's output channels changed
-        if (param === "sizeOut" && updatedNodes.find((n) => n.id === nodeId)?.type === "convolutionalBlock") {
+        if (param === "sizeOut" && updatedNodes.find((n) => n.id === nodeId)?.type === "convBlock") {
           let finalNodes = [...updatedNodes]
 
           // Find the next conv layer and update its input channels
@@ -329,7 +285,7 @@ export default function NeuralNetworkFlow() {
           const currentNode = updatedNodes.find((n) => n.id === nodeId)
           if (currentNode) {
             const convPoolNodes = updatedNodes.filter(
-              (node) => node.type === "convolutionalBlock" || node.type === "poolingBlock",
+              (node) => node.type === "convBlock" || node.type === "poolingBlock",
             )
 
             const sortedNodes = [...convPoolNodes].sort((a, b) => a.data.sequenceIndex - b.data.sequenceIndex)
@@ -486,7 +442,7 @@ export default function NeuralNetworkFlow() {
     }
 
     // Synchronize convolutional blocks (conv to conv, skipping pooling)
-    const convNodes = nodes.filter((node) => node.type === "convolutionalBlock")
+    const convNodes = nodes.filter((node) => node.type === "convBlock")
 
     if (convNodes.length >= 2) {
       // Sort by sequence index
@@ -554,105 +510,7 @@ export default function NeuralNetworkFlow() {
     },
   }))
 
-  // Function to add a new node from context menu
-  const addNodeFromContext = (type: string) => {
-    if (!contextMenu) return
-
-    // Generate a unique ID based on node type and current count
-    let typePrefix = ""
-    let defaultData = {}
-
-    switch (type) {
-      case "inputBlock":
-        typePrefix = "input"
-        // Calculate input dimension based on convolutional output
-        const inputDim = calculateInputBlockDimension(nodes)
-        defaultData = {
-          sizeIn: inputDim,
-          sizeOut: Math.max(64, Math.floor(inputDim / 4)),
-          sequenceIndex: 0,
-          id: `input-${nodes.filter((n) => n.type === "inputBlock").length + 1}`,
-        }
-        break
-      case "hiddenBlock":
-        typePrefix = "hidden"
-        const hiddenCount = nodes.filter((n) => n.type === "hiddenBlock").length
-        defaultData = {
-          sizeIn: 64,
-          sizeOut: 32,
-          activation: "relu",
-          sequenceIndex: 1,
-          id: `hidden-${hiddenCount + 1}`,
-        }
-        break
-      case "outputBlock":
-        typePrefix = "output"
-        defaultData = {
-          sizeIn: 32,
-          sizeOut: 10,
-          sequenceIndex: 2,
-          id: `output-${nodes.filter((n) => n.type === "outputBlock").length + 1}`,
-        }
-        break
-      case "convolutionalBlock":
-        typePrefix = "conv"
-        const convCount = nodes.filter((n) => n.type === "convolutionalBlock").length
-        defaultData = {
-          size: 3,
-          sizeIn: 3,
-          sizeOut: 32,
-          padding: 1,
-          sequenceIndex: convCount,
-          id: `conv-${convCount + 1}`,
-        }
-        break
-      case "poolingBlock":
-        typePrefix = "pool"
-        const poolCount = nodes.filter((n) => n.type === "poolingBlock").length
-        defaultData = {
-          size: 2,
-          stride: 2,
-          type: "max",
-          channels: 32,
-          sequenceIndex: poolCount,
-          id: `pool-${poolCount + 1}`,
-        }
-        break
-    }
-
-    const newId = `${typePrefix}-${nodes.filter((n) => n.type === type).length + 1}`
-
-    // Create the new node
-    const newNode: Node = {
-      id: newId,
-      type,
-      position: { x: contextMenu.x, y: contextMenu.y },
-      data: {
-        label:
-          type === "inputBlock"
-            ? "Input Layer"
-            : type === "hiddenBlock"
-              ? `Hidden Layer ${nodes.filter((n) => n.type === "hiddenBlock").length + 1}`
-              : type === "outputBlock"
-                ? "Output Layer"
-                : type === "convolutionalBlock"
-                  ? `Conv2D Layer ${nodes.filter((n) => n.type === "convolutionalBlock").length + 1}`
-                  : `Pooling Layer ${nodes.filter((n) => n.type === "poolingBlock").length + 1}`,
-        ...defaultData,
-        onChange: handleNodeParamChange,
-      },
-    }
-
-    setNodes((prevNodes) => [...prevNodes, newNode])
-    setContextMenu(null)
-
-    toast({
-      title: "Block added",
-      description: `Added a new ${type.replace("Block", "")} block to the editor.`,
-    })
-  }
-
-  // Function to add a new node from dropdown
+  // Function to add a new node
   const addNode = (type: string) => {
     // Generate a unique ID based on node type and current count
     let typePrefix = ""
@@ -766,15 +624,15 @@ export default function NeuralNetworkFlow() {
         newY = 100
         break
 
-      case "convolutionalBlock":
+      case "convBlock":
         typePrefix = "conv"
 
         // Get all conv and pooling blocks to determine sequence index
-        const convPoolBlocks = nodes.filter((node) => node.type === "convolutionalBlock" || node.type === "poolingBlock")
+        const convPoolBlocks = nodes.filter((node) => node.type === "convBlock" || node.type === "poolingBlock")
         const sequenceIndex = convPoolBlocks.length
 
         // Get the last conv block to determine input channels
-        const convBlocks = nodes.filter((node) => node.type === "convolutionalBlock")
+        const convBlocks = nodes.filter((node) => node.type === "convBlock")
 
         // If there are no conv blocks, use default input channels (3 for RGB)
         let prevOutputChannels = 3
@@ -800,12 +658,12 @@ export default function NeuralNetworkFlow() {
         typePrefix = "pool"
 
         // Get all conv/pool blocks to determine sequence index
-        const allBlocks = nodes.filter((node) => node.type === "convolutionalBlock" || node.type === "poolingBlock")
+        const allBlocks = nodes.filter((node) => node.type === "convBlock" || node.type === "poolingBlock")
         const poolSequenceIndex = allBlocks.length
 
         // Get the last conv block to determine channel count
         const lastConvBlock = nodes
-          .filter((node) => node.type === "convolutionalBlock")
+          .filter((node) => node.type === "convBlock")
           .sort((a, b) => a.data.sequenceIndex - b.data.sequenceIndex)
           .pop()
 
@@ -849,7 +707,7 @@ export default function NeuralNetworkFlow() {
               ? `Output Layer ${existingCount + 1}`
               : type === "hiddenBlock"
                 ? `Hidden Layer ${existingCount + 1}`
-                : type === "convolutionalBlock"
+                : type === "convBlock"
                   ? `Conv2D Layer ${existingCount + 1}`
                   : `Pooling Layer ${existingCount + 1}`,
         id: newId,
@@ -859,111 +717,50 @@ export default function NeuralNetworkFlow() {
     }
 
     setNodes((prevNodes) => [...prevNodes, newNode])
-
-    toast({
-      title: "Block added",
-      description: `Added a new ${type.replace("Block", "").replace("conv", "convolutional")} block to the editor.`,
-    })
-  }
-
-  const onCompile = () => {
-    toast({
-      title: "Compiling model",
-      description: "Neural network architecture compiled successfully!",
-    })
-  }
-
-  function nodeColor(node: any) {
-    switch (node.type) {
-      case "inputBlock":
-        return "#4caf50"
-      case "outputBlock":
-        return "#e91e63"
-      case "hiddenBlock":
-        return "#ff9800"
-      case "convolutionalBlock":
-        return "#9c27b0"
-      case "poolingBlock":
-        return "#00bcd4"
-      default:
-        return "#3880ff"
-    }
   }
 
   return (
-    <div className="w-full h-screen">
-      <div className="h-16 border-b flex items-center justify-between bg-[#1e2530] text-white px-4">
-        <div className="flex items-center">
-          <div className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-transparent bg-clip-text pr-4 border-r">
-            BLOCKS.
+    <div style={{ width: "100%", height: "600px" }}>
+      <ReactFlow
+        nodes={nodesWithHandlers}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        fitView
+      >
+        <Background />
+        <Controls />
+        <Panel position="top-right">
+          <div className="flex flex-col gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <PlusCircle className="h-4 w-4" />
+                  Add Block
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => addNode("inputBlock")}>Add Input Block</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => addNode("hiddenBlock")}>Add Hidden Layer</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => addNode("outputBlock")}>Add Output Block</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => addNode("convBlock")}>Add Convolutional Layer</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => addNode("poolingBlock")}>Add Pooling Layer</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="text-sm bg-gray-100 p-2 rounded">
+              <p>Sequential Mode: All blocks interact based on their sequence position</p>
+              <p className="mt-1 text-xs text-gray-600">
+                Conv layers connect directly to other conv layers, skipping pooling layers for channel dimensions
+              </p>
+              <p className="mt-1 text-xs text-gray-600">
+                Input layer size is automatically calculated from convolutional network output
+              </p>
+            </div>
           </div>
-          <div className="ml-4">Neural Network Designer</div>
-        </div>
-
-        <div className="flex items-center gap-6">
-          <button className="flex flex-col items-center text-xs opacity-70 hover:opacity-100">
-            <span className="mb-1">EXPORT</span>
-          </button>
-          <button className="flex flex-col items-center text-xs opacity-70 hover:opacity-100">
-            <span className="mb-1">NEW</span>
-          </button>
-          <button className="flex flex-col items-center text-xs opacity-70 hover:opacity-100">
-            <span className="mb-1">LOAD</span>
-          </button>
-          <button className="flex flex-col items-center text-xs opacity-70 hover:opacity-100">
-            <span className="mb-1">TUTORIALS</span>
-          </button>
-          <button className="flex flex-col items-center text-xs opacity-70 hover:opacity-100">
-            <span className="mb-1">OPTIONS</span>
-          </button>
-          <button className="flex flex-col items-center text-xs opacity-70 hover:opacity-100">
-            <span className="mb-1">SOCIAL</span>
-          </button>
-          <button className="flex flex-col items-center text-xs opacity-70 hover:opacity-100">
-            <span className="mb-1">GITHUB</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="w-full h-[calc(100vh-4rem)]" onContextMenu={onContextMenu}>
-        <ReactFlowProvider>
-          <ReactFlow
-            nodes={nodesWithHandlers}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            onPaneClick={onPaneClick}
-            connectionLineType={ConnectionLineType.Bezier}
-            connectionLineStyle={{ stroke: "#3880ff", strokeWidth: 2 }}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-            fitView
-          >
-            <Background color="#4a5568" gap={16} size={1} />
-            <Controls />
-            <MiniMap nodeStrokeWidth={3} nodeColor={nodeColor} />
-
-            <Panel position="bottom-right">
-              <button
-                onClick={onCompile}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-md font-mono"
-              >
-                COMPILE
-              </button>
-            </Panel>
-          </ReactFlow>
-        </ReactFlowProvider>
-
-        {contextMenu && (
-          <ContextMenu
-            x={contextMenu.x}
-            y={contextMenu.y}
-            onClose={() => setContextMenu(null)}
-            onAddNode={addNodeFromContext}
-          />
-        )}
-      </div>
+        </Panel>
+      </ReactFlow>
     </div>
   )
 }
